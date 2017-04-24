@@ -25,7 +25,7 @@
 
 @interface MSMainWinController : NSWindowController
 {
-	NSImage *baseImage;
+	NSImage * _baseImage;
 	MSBackgroundWorker *bgW;
 	
 	//Interface elements
@@ -33,7 +33,7 @@
 	IBOutlet NSImageView *baseImageView;
 }
 
-@property (assign, readwrite) NSImage *baseImage; 
+@property (nonatomic, readwrite) NSImage *baseImage;
 
 #pragma mark Main Execute Methods
 - (void) executeForImage:(NSImage*) startImage;

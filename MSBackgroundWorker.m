@@ -84,32 +84,28 @@
 		CIImage *croppedImageForScreen = [self cropImage:scaledImage forScreen:cropForScreen];
 		
 		NSBitmapImageRep *bitmapImage = [self bitmapImageRepForImage:croppedImageForScreen];
-		NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%i.tiff", outputDirectory, i];
+		NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%zd.tiff", outputDirectory, i];
 		
 		[self saveImageToFile:directoryForOutput imageRep:bitmapImage];
-		
 		SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:i];
-		
-		[thisDesktop setPicture:[NSURL URLWithString:directoryForOutput]];			
+		[thisDesktop setPicture:(SystemEventsAlias *)[NSURL URLWithString:directoryForOutput]];
 	}
 	
 	[self notifyOfCompletionInMainThread];
 }
 
--(NSString*) outputDirectory
-{
+-(NSString*) outputDirectory {
 	NSString *directoryForOutput = [NSString stringWithFormat:[@"~/Pictures/MultiScape/%f" stringByExpandingTildeInPath],[[NSDate date] timeIntervalSince1970]];
 		
-	if(! [fileManager fileExistsAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath]])
-		[fileManager createDirectoryAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath] attributes:nil]; 
-	
-	[fileManager createDirectoryAtPath:directoryForOutput attributes:nil];	
+    if(! [fileManager fileExistsAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath]]) {
+        [fileManager createDirectoryAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath] withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    [fileManager createDirectoryAtPath:directoryForOutput withIntermediateDirectories:YES attributes:nil error:nil];
 	
 	return directoryForOutput;
 }
 
-- (NSBitmapImageRep *)bitmapImageRepForImage:(CIImage*)ciImage 
-{
+- (NSBitmapImageRep *)bitmapImageRepForImage:(CIImage*)ciImage {
 	NSBitmapImageRep *bitmapImageRep = nil;
 	CGRect extent = [ciImage extent];
 	bitmapImageRep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL 
@@ -129,10 +125,10 @@
 	NSRectFill(NSMakeRect(0, 0, [bitmapImageRep pixelsWide], [bitmapImageRep pixelsHigh]));
 	CGRect imageDestinationRect = CGRectMake(0.0, [bitmapImageRep pixelsHigh] - extent.size.height, extent.size.width, extent.size.height);
 	CIContext *ciContext = [nsContext CIContext];
-	[ciContext drawImage:ciImage atPoint:imageDestinationRect.origin fromRect:extent];
+	[ciContext drawImage:ciImage inRect:imageDestinationRect fromRect:extent];
 	[NSGraphicsContext restoreGraphicsState];
 	[NSGraphicsContext restoreGraphicsState];
-    return [bitmapImageRep autorelease];
+    return bitmapImageRep;
 }
 
 -(CIImage*)	cropImage:(CIImage*)imageToCrop forScreen:(CIVector*)screenCropVector

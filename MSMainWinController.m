@@ -33,7 +33,7 @@
 
 @implementation MSMainWinController
 
-@synthesize baseImage;
+@synthesize baseImage = _baseImage;
 
 #pragma mark Initialization Methods
 - (void)awakeFromNib
@@ -43,9 +43,8 @@
 
 #pragma mark Main Execute Methods
 
--(void) setBaseImage:(NSImage*)imageToSet
-{
-	baseImage = imageToSet;
+- (void) setBaseImage:(NSImage*)imageToSet {
+	_baseImage = imageToSet;
 	
 	NSLog(@"Input image changed");
 	
