@@ -60,7 +60,20 @@
 -(void) execute
 {
 	NSArray *screens = [NSScreen screens];
-	
+    /// Get All Possible Resolution of Main Display
+    NSArray* theref  =  (__bridge NSArray *)(CGDisplayCopyAllDisplayModes ( CGMainDisplayID(), nil ));
+    NSMutableArray * rezes = [[NSMutableArray  alloc]init];
+    for (id aMode  in theref) {
+        CGDisplayModeRef  thisMode = (__bridge CGDisplayModeRef)(aMode);
+        size_t theWidth = CGDisplayModeGetWidth( thisMode );
+        size_t theHeight = CGDisplayModeGetHeight( thisMode );
+        NSString *theRez = [NSString stringWithFormat:@"%zux%zu",theWidth,theHeight];
+        if (![rezes containsObject:theRez]) {
+            [rezes addObject:theRez];
+        }
+    }
+    NSLog(@" display deatails = %@", rezes);
+
 	NSRect fullSpace = [self fullSpaceFromScreens:screens];
 	
 	CIImage *baseCIImage =[CIImage imageWithData:[baseImage TIFFRepresentation]];
@@ -201,6 +214,8 @@
 	
 	for (NSScreen *thisScreen in screens) 
 	{
+        NSLog(@"Screen frame:%f %f %f %f\n", thisScreen.frame.origin.x, thisScreen.frame.origin.y,
+              thisScreen.frame.size.width, thisScreen.frame.size.height);
 		fullSpace.origin.x = [self minXBetween:fullSpace andScreen:thisScreen];
 		fullSpace.origin.y = [self minYBetween:fullSpace andScreen:thisScreen];
 		fullSpace.size.width = [self maxXBetween:fullSpace andScreen:thisScreen];
