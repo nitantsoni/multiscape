@@ -23,63 +23,51 @@
 #import "MSMainWinController.h"
 #import "MSBackgroundWorker.h"
 
-@interface MSMainWinController ()
+@interface MSMainWinController () {
+    NSImage * _baseImage;
+    MSBackgroundWorker *_worker;
+}
 
--(void) notifyOfCompletedBackgroundExecution:(NSNotification*)notif;
+- (void) notifyOfCompletedBackgroundExecution:(NSNotification*)notif;
 
 @end
-
-
 
 @implementation MSMainWinController
 
 @synthesize baseImage = _baseImage;
 
 #pragma mark Initialization Methods
-- (void)awakeFromNib
-{
-	
+- (void)awakeFromNib {
+    _worker = [[MSBackgroundWorker alloc] init];
+    CGSize sz = [_worker perfectSize];
+    [sizeLabel setStringValue:[NSString stringWithFormat:@"%.0f x %.0f", sz.width, sz.height]];
 }
 
 #pragma mark Main Execute Methods
-
-- (void) setBaseImage:(NSImage*)imageToSet {
-	_baseImage = imageToSet;
-	
-	NSLog(@"Input image changed");
-	
-	[self executeForImage: imageToSet];
+- (void)setBaseImage:(NSImage*)imageToSet {
+    _baseImage = imageToSet;
+    NSLog(@"Input image changed");
+    [self executeForImage: imageToSet];
 }
 
--(void) notifyOfCompletedBackgroundExecution:(NSNotification*)notif
-{
-	if([notif object] == bgW)
-	{
-		[infoField setStringValue:bgW.procText];
-	}
+- (void)notifyOfCompletedBackgroundExecution:(NSNotification*)notif {
+    if([notif object] == _worker) {
+        [infoField setStringValue:_worker.procText];
+    }
 }
 
-- (void) executeForImage:(NSImage*) startImage
-{
-	if([baseImageView image] != nil)
-	{
-		if(bgW != nil)
-		{
-			[[NSNotificationCenter defaultCenter] removeObserver:self name:MSBackgroundWorkerFinishedNotification object:bgW];
-		}
-		
-		bgW = [MSBackgroundWorker new];
-		bgW.baseImage = startImage;
-		
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notifyOfCompletedBackgroundExecution:) name:MSBackgroundWorkerFinishedNotification object:bgW];
-		
-		[bgW execute];
-	}
+- (void)executeForImage:(NSImage*)startImage {
+    if (baseImageView.image) {
+        _worker.baseImage = startImage;
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notifyOfCompletedBackgroundExecution:)
+                                                     name:MSBackgroundWorkerFinishedNotification object:_worker];
+        [_worker execute];
+    }
 }
 
-- (void)windowWillClose:(NSNotification *)notification
-{
-	[NSApp terminate:self];
+- (void)windowWillClose:(NSNotification *)notification {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:MSBackgroundWorkerFinishedNotification object:_worker];
+    [NSApp terminate:self];
 }
 
 @end

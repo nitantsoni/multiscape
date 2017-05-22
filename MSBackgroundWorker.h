@@ -25,39 +25,22 @@
 #define MSBackgroundWorkerFinishedNotification @"MSBackgroundWorkerFinishedNotification"
 
 @interface MSBackgroundWorker : NSObject {
-	NSImage *__weak baseImage;
-	
-	//For setting the desktop
-	SystemEventsApplication *sysEventsBridgeApp;
-	
-	//For creating the folders for output
-	NSFileManager *fileManager;	
-	
-	NSString *__weak procText;
+    NSImage *__weak baseImage;
+
+    //For setting the desktop
+    SystemEventsApplication *sysEventsBridgeApp;
+
+    //For creating the folders for output
+    NSFileManager *fileManager;
+
+    NSString *__weak procText;
 }
 
 @property (weak, readwrite) NSImage *baseImage; 
 @property (weak, readwrite) NSString *procText;
 
--(void) execute;
--(void) notifyOfCompletionInMainThread;
+- (void)execute;
 
-#pragma mark Image Manipulation Methods
--(NSRect) fullSpaceFromScreens:(NSArray*)screens;
-
--(void)updateDimensions:(NSRect)fullSpace forScreen:(NSScreen*)displayToCheck;
-
--(double) scaleFactorWithFullspace:(NSRect)fullSpace withOriginalImage:(CIImage*)originalImage;
--(CIImage*) scaleImage:(CIImage*)imageToScale byFactor:(double)scaleFactor;
--(CIImage*)	cropImage:(CIImage*)imageToCrop forScreen:(CIVector*)screenCropVector;
--(CIVector*) cropRectForScreen:(NSScreen*)screen inFullSpace:(NSRect)fullSpace;
--(NSBitmapImageRep *)bitmapImageRepForImage:(CIImage*)ciImage;
--(NSString*) outputDirectory;
--(void) saveImageToFile:(NSString*)fileLocation imageRep:(NSBitmapImageRep*)outputBitmapImageRep;
-
--(double) minXBetween:(NSRect)rect andScreen:(NSScreen*)screen;
--(double) minYBetween:(NSRect)rect andScreen:(NSScreen*)screen;
--(double) maxXBetween:(NSRect)rect andScreen:(NSScreen*)screen;
--(double) maxYBetween:(NSRect)rect andScreen:(NSScreen*)screen;
+- (CGSize)perfectSize;
 
 @end

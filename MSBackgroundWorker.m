@@ -21,303 +21,191 @@
 
 #import "MSBackgroundWorker.h"
 
-@interface MSBackgroundWorker ()
+const uint32_t maxDisplays = 20;
 
--(void) mainThreadCompletionNotification;
+@interface MSBackgroundWorker () {
+    uint32_t _displayCount;
+    CGSize *_allScreenSizes;
+    CGSize _perfectSize;
+}
+
+- (void)mainThreadCompletionNotification;
 
 @end
-
 
 @implementation MSBackgroundWorker
 
 @synthesize baseImage;
 @synthesize procText;
 
--(id) init
-{
-	if([super init] != nil)
-	{
-		fileManager = [NSFileManager defaultManager];
-		
-		sysEventsBridgeApp = [SBApplication applicationWithBundleIdentifier:@"com.apple.SystemEvents"];		
-	}	
-	
-	return self;
+- (instancetype)init {
+    if (self = [super init]) {
+        fileManager = [NSFileManager defaultManager];
+        sysEventsBridgeApp = [SBApplication applicationWithBundleIdentifier:@"com.apple.SystemEvents"];        
+    }    
+    return self;
 }
 
--(void) mainThreadCompletionNotification
-{
-	NSNotification *n = [NSNotification notificationWithName:MSBackgroundWorkerFinishedNotification object:self];
-	
-	[[NSNotificationCenter defaultCenter] postNotification:n];
+- (CGSize)perfectSize {
+    CGDirectDisplayID onlineDisplays[maxDisplays];
+    _displayCount = 0;
+    if (CGGetOnlineDisplayList(maxDisplays, onlineDisplays, &_displayCount) != kCGErrorSuccess) {
+        NSLog(@"CGGetOnlineDisplayList Error.");
+        return CGSizeZero;
+    }
+
+    _allScreenSizes = malloc(maxDisplays);
+    _perfectSize = CGSizeZero;
+    for (uint32_t i = 0; i < _displayCount; i++) {
+        CGSize sz = [self getDisplayResolution:onlineDisplays[i]];
+        _allScreenSizes[i] = sz;
+        _perfectSize.width += sz.width;
+        _perfectSize.height = MAX(_perfectSize.height, sz.height);
+    }
+    return _perfectSize;
 }
 
--(void) notifyOfCompletionInMainThread
-{
-	[self performSelectorOnMainThread:@selector(mainThreadCompletionNotification) withObject:nil waitUntilDone:FALSE];
-}
-
--(void) execute
-{
-	NSArray *screens = [NSScreen screens];
-    /// Get All Possible Resolution of Main Display
-    NSArray* theref  =  (__bridge NSArray *)(CGDisplayCopyAllDisplayModes ( CGMainDisplayID(), nil ));
-    NSMutableArray * rezes = [[NSMutableArray  alloc]init];
-    for (id aMode  in theref) {
-        CGDisplayModeRef  thisMode = (__bridge CGDisplayModeRef)(aMode);
-        size_t theWidth = CGDisplayModeGetWidth( thisMode );
-        size_t theHeight = CGDisplayModeGetHeight( thisMode );
-        NSString *theRez = [NSString stringWithFormat:@"%zux%zu",theWidth,theHeight];
-        if (![rezes containsObject:theRez]) {
-            [rezes addObject:theRez];
+- (CGSize)getDisplayResolution:(CGDirectDisplayID)displayID {
+    NSArray *allModes = (__bridge NSArray *)(CGDisplayCopyAllDisplayModes(displayID, nil));
+    NSMutableArray *allRez = [[NSMutableArray alloc] init];
+    CGSize maxRez = CGSizeZero;
+    for (id aMode in allModes) {
+        CGDisplayModeRef thisMode = (__bridge CGDisplayModeRef)(aMode);
+        size_t theWidth = CGDisplayModeGetWidth(thisMode);
+        size_t theHeight = CGDisplayModeGetHeight(thisMode);
+        // Get the first one
+        if (CGSizeEqualToSize(maxRez, CGSizeZero)) {
+            maxRez = CGSizeMake(theWidth, theHeight);
+        }
+        NSString *theRez = [NSString stringWithFormat:@"%zux%zu", theWidth, theHeight];
+        if (![allRez containsObject:theRez]) {
+            [allRez addObject:theRez];
         }
     }
-    NSLog(@" display deatails = %@", rezes);
-
-	NSRect fullSpace = [self fullSpaceFromScreens:screens];
-	
-	CIImage *baseCIImage =[CIImage imageWithData:[baseImage TIFFRepresentation]];
-	
-	double scaleFactor = [self scaleFactorWithFullspace:fullSpace withOriginalImage:baseCIImage];	
-	
-	NSLog(@"Scale factor for image:%f", scaleFactor);
-	
-	CIImage *scaledImage = [self scaleImage:baseCIImage byFactor:scaleFactor];
-	
-	self.procText = [NSString stringWithFormat:@"%ix%i -(x%f)-> %ix%i", (int)[baseCIImage extent].size.width,  (int)[baseCIImage extent].size.height, scaleFactor, (int)[scaledImage extent].size.width, (int)[scaledImage extent].size.height];		
-	
-	NSString *outputDirectory = [self outputDirectory];
-	
-	NSUInteger i, count = [screens count];
-	for (i = 0; i < count; i++) {
-		NSScreen *screen = [screens objectAtIndex:i];
-		
-		CIVector *cropForScreen = [self cropRectForScreen:screen inFullSpace:fullSpace];
-		
-		CIImage *croppedImageForScreen = [self cropImage:scaledImage forScreen:cropForScreen];
-		
-		NSBitmapImageRep *bitmapImage = [self bitmapImageRepForImage:croppedImageForScreen];
-		NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%zd.tiff", outputDirectory, i];
-		
-		[self saveImageToFile:directoryForOutput imageRep:bitmapImage];
-		SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:i];
-		[thisDesktop setPicture:(SystemEventsAlias *)[NSURL URLWithString:directoryForOutput]];
-	}
-	
-	[self notifyOfCompletionInMainThread];
+    NSLog(@" display deatails = %@", allRez);
+    return maxRez;
 }
 
--(NSString*) outputDirectory {
-	NSString *directoryForOutput = [NSString stringWithFormat:[@"~/Pictures/MultiScape/%f" stringByExpandingTildeInPath],[[NSDate date] timeIntervalSince1970]];
-		
-    if(! [fileManager fileExistsAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath]]) {
+- (void)mainThreadCompletionNotification {
+    NSNotification *n = [NSNotification notificationWithName:MSBackgroundWorkerFinishedNotification object:self];
+    [[NSNotificationCenter defaultCenter] postNotification:n];
+}
+
+- (void)notifyOfCompletionInMainThread {
+    [self performSelectorOnMainThread:@selector(mainThreadCompletionNotification) withObject:nil waitUntilDone:NO];
+}
+
+- (void)execute {
+    CIImage *baseCIImage = [CIImage imageWithData:[baseImage TIFFRepresentation]];
+    double scaleFactor = [self scaleFactorWithSize:_perfectSize withOriginalImage:baseCIImage];
+    NSLog(@"Scale factor for image:%f", scaleFactor);
+    
+    CIImage *scaledImage = [self scaleImage:baseCIImage byFactor:scaleFactor];
+    self.procText = [NSString stringWithFormat:@"%ix%i -(x%f)-> %ix%i", (int)[baseCIImage extent].size.width,  (int)[baseCIImage extent].size.height, scaleFactor, (int)[scaledImage extent].size.width, (int)[scaledImage extent].size.height];
+    
+    NSString *outputDirectory = [self outputDirectory];
+    CGRect currentRect = CGRectZero;
+    for (int i = 0; i < _displayCount; i++) {
+        // CIVector -> [x, y, w, h]
+        CIVector *cropForScreen = [[CIVector alloc] initWithX:currentRect.origin.x Y:currentRect.origin.y
+                                                            Z:_allScreenSizes[i].width W:_allScreenSizes[i].height];
+        currentRect.origin.x += _allScreenSizes[i].width;
+        CIImage *croppedImageForScreen = [self cropImage:scaledImage withRect:cropForScreen];
+        NSBitmapImageRep *bitmapImage = [self bitmapImageRepForImage:croppedImageForScreen];
+        NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%zd.tiff", outputDirectory, i];
+        
+        [self saveImageToFile:directoryForOutput imageRep:bitmapImage];
+        SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:i];
+        [thisDesktop setPicture:(SystemEventsAlias *)[NSURL URLWithString:directoryForOutput]];
+    }
+    
+    [self notifyOfCompletionInMainThread];
+}
+
+- (NSString*)outputDirectory {
+    NSString *directoryForOutput = [NSString stringWithFormat:[@"~/Pictures/MultiScape/%f" stringByExpandingTildeInPath],
+                                    [[NSDate date] timeIntervalSince1970]];
+        
+    if(![fileManager fileExistsAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath]]) {
         [fileManager createDirectoryAtPath:[@"~/Pictures/MultiScape" stringByExpandingTildeInPath] withIntermediateDirectories:YES attributes:nil error:nil];
     }
     [fileManager createDirectoryAtPath:directoryForOutput withIntermediateDirectories:YES attributes:nil error:nil];
-	
-	return directoryForOutput;
+    
+    return directoryForOutput;
+}
+
+- (CIImage* )cropImage:(CIImage *)imageToCrop withRect:(CIVector *)screenCropVector {
+    CIFilter *thisCropFilter = [CIFilter filterWithName:@"CICrop"];
+    [thisCropFilter setDefaults];
+    [thisCropFilter setValue:screenCropVector forKey:@"inputRectangle"];
+    [thisCropFilter setValue:imageToCrop forKey:@"inputImage"];
+    return [thisCropFilter valueForKey:@"outputImage"];
 }
 
 - (NSBitmapImageRep *)bitmapImageRepForImage:(CIImage*)ciImage {
-	NSBitmapImageRep *bitmapImageRep = nil;
-	CGRect extent = [ciImage extent];
-	bitmapImageRep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL 
-															 pixelsWide:extent.size.width 
-															 pixelsHigh:extent.size.height 
-														  bitsPerSample:8 
-														samplesPerPixel:4 
-															   hasAlpha:YES
-															   isPlanar:NO 
-														 colorSpaceName:NSDeviceRGBColorSpace
-															bytesPerRow:0
-														   bitsPerPixel:0];
-	NSGraphicsContext *nsContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:bitmapImageRep];
-	[NSGraphicsContext saveGraphicsState];
-	[NSGraphicsContext setCurrentContext:nsContext];
-	[[NSColor clearColor] set];
-	NSRectFill(NSMakeRect(0, 0, [bitmapImageRep pixelsWide], [bitmapImageRep pixelsHigh]));
-	CGRect imageDestinationRect = CGRectMake(0.0, [bitmapImageRep pixelsHigh] - extent.size.height, extent.size.width, extent.size.height);
-	CIContext *ciContext = [nsContext CIContext];
-	[ciContext drawImage:ciImage inRect:imageDestinationRect fromRect:extent];
-	[NSGraphicsContext restoreGraphicsState];
-	[NSGraphicsContext restoreGraphicsState];
+    NSBitmapImageRep *bitmapImageRep = nil;
+    CGRect extent = [ciImage extent];
+    bitmapImageRep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL 
+                                                             pixelsWide:extent.size.width 
+                                                             pixelsHigh:extent.size.height 
+                                                          bitsPerSample:8 
+                                                        samplesPerPixel:4 
+                                                               hasAlpha:YES
+                                                               isPlanar:NO 
+                                                         colorSpaceName:NSDeviceRGBColorSpace
+                                                            bytesPerRow:0
+                                                           bitsPerPixel:0];
+    NSGraphicsContext *nsContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:bitmapImageRep];
+    [NSGraphicsContext saveGraphicsState];
+    [NSGraphicsContext setCurrentContext:nsContext];
+    [[NSColor clearColor] set];
+    NSRectFill(NSMakeRect(0, 0, [bitmapImageRep pixelsWide], [bitmapImageRep pixelsHigh]));
+    CGRect imageDestinationRect = CGRectMake(0.0, [bitmapImageRep pixelsHigh] - extent.size.height, extent.size.width, extent.size.height);
+    CIContext *ciContext = [nsContext CIContext];
+    [ciContext drawImage:ciImage inRect:imageDestinationRect fromRect:extent];
+    [NSGraphicsContext restoreGraphicsState];
+    [NSGraphicsContext restoreGraphicsState];
     return bitmapImageRep;
 }
 
--(CIImage*)	cropImage:(CIImage*)imageToCrop forScreen:(CIVector*)screenCropVector
-{
-	CIFilter *thisCropFilter = [CIFilter filterWithName:@"CICrop"];
-	
-	[thisCropFilter setDefaults];
-	
-	[thisCropFilter setValue:screenCropVector forKey:@"inputRectangle"];
-	[thisCropFilter setValue:imageToCrop forKey:@"inputImage"];
-	
-	return [thisCropFilter valueForKey:@"outputImage"];
+- (CIVector *)cropRectForScreen:(NSScreen*)screen inFullSpace:(NSRect)fullSpace {
+    NSRect thisScreenFrame = [screen frame];
+    
+    float thisX = thisScreenFrame.origin.x - fullSpace.origin.x;
+    float thisY = thisScreenFrame.origin.y - fullSpace.origin.y;
+    float thisZ = thisScreenFrame.size.width;
+    float thisW = thisScreenFrame.size.height;
+    
+    CIVector *thisVector = [[CIVector alloc] initWithX:thisX Y:thisY Z:thisZ W:thisW];
+    return thisVector;
 }
 
-- (CIVector*) cropRectForScreen:(NSScreen*)screen inFullSpace:(NSRect)fullSpace
-{	
-	NSRect thisScreenFrame = [screen frame];
-	
-	float thisX = thisScreenFrame.origin.x - fullSpace.origin.x;
-	float thisY = thisScreenFrame.origin.y - fullSpace.origin.y;
-	float thisZ = thisScreenFrame.size.width;
-	float thisW = thisScreenFrame.size.height;
-	
-	CIVector *thisVector = [[CIVector alloc] initWithX:thisX Y:thisY Z:thisZ W:thisW];
-	
-	return thisVector;
+- (CIImage*)scaleImage:(CIImage*)imageToScale byFactor:(double)scaleFactor {
+    CIFilter *scaleTransformFilter = [CIFilter filterWithName:@"CILanczosScaleTransform"];
+    [scaleTransformFilter setValue:[NSNumber numberWithDouble:scaleFactor] forKey:@"inputScale"];
+    [scaleTransformFilter setValue:imageToScale forKey:@"inputImage"];
+    [scaleTransformFilter setValue:[NSNumber numberWithInt:1] forKey:@"inputAspectRatio"];
+    
+    CIImage *scaledBaseImage = [scaleTransformFilter valueForKey:@"outputImage"];
+    NSLog(@"Scaled base image dimensions: %f x %f",[scaledBaseImage extent].size.width, [scaledBaseImage extent].size.height);
+    return [scaleTransformFilter valueForKey:@"outputImage"];
 }
 
--(CIImage*) scaleImage:(CIImage*)imageToScale byFactor:(double)scaleFactor
-{		
-	CIFilter *scaleTransformFilter = [CIFilter filterWithName:@"CILanczosScaleTransform"];
-	
-	[scaleTransformFilter setValue:[NSNumber numberWithDouble:scaleFactor] forKey:@"inputScale"];
-	[scaleTransformFilter setValue:imageToScale forKey:@"inputImage"];
-	[scaleTransformFilter setValue:[NSNumber numberWithInt:1] forKey:@"inputAspectRatio"];
-	
-	CIImage *scaledBaseImage = [scaleTransformFilter valueForKey:@"outputImage"];
-	
-	NSLog(@"Scaled base image dimensions: %f x %f",[scaledBaseImage extent].size.width, [scaledBaseImage extent].size.height);
-	
-	return [scaleTransformFilter valueForKey:@"outputImage"];
+- (double)scaleFactorWithSize:(CGSize)size withOriginalImage:(CIImage*)originalImage {
+    CGRect baseImageRect = [originalImage extent]; 
+    
+    NSLog(@"\nBase Image Dimensions:\n              %f\n%f                 %f\n              %f",baseImageRect.size.height, baseImageRect.origin.x, baseImageRect.size.width, baseImageRect.origin.y);
+    
+    double hScale = size.width / baseImageRect.size.width;
+    double vScale = size.height / baseImageRect.size.height;
+    return MAX(hScale, vScale);
 }
 
--(double) scaleFactorWithFullspace:(NSRect)fullSpace withOriginalImage:(CIImage*)originalImage
-{
-	CGRect baseImageRect = [originalImage extent]; 
-	
-	NSLog(@"\nBase Image Dimensions:\n              %f\n%f                 %f\n              %f",baseImageRect.size.height, baseImageRect.origin.x, baseImageRect.size.width, baseImageRect.origin.y);
-	
-	double hScale = fullSpace.size.width / baseImageRect.size.width;
-	double vScale = fullSpace.size.height / baseImageRect.size.height;
-	
-	double scaleFactor = hScale;
-	
-	if(vScale > scaleFactor)
-		scaleFactor = vScale;
-	
-	
-	return scaleFactor;
-}
-
--(NSRect) fullSpaceFromScreens:(NSArray*)screens
-{
-	NSRect fullSpace;
-	
-	fullSpace.origin.x = 0;
-	fullSpace.origin.y = 0;
-	fullSpace.size.width = 0;
-	fullSpace.size.height = 0;
-	
-	for (NSScreen *thisScreen in screens) 
-	{
-        NSLog(@"Screen frame:%f %f %f %f\n", thisScreen.frame.origin.x, thisScreen.frame.origin.y,
-              thisScreen.frame.size.width, thisScreen.frame.size.height);
-		fullSpace.origin.x = [self minXBetween:fullSpace andScreen:thisScreen];
-		fullSpace.origin.y = [self minYBetween:fullSpace andScreen:thisScreen];
-		fullSpace.size.width = [self maxXBetween:fullSpace andScreen:thisScreen];
-		fullSpace.size.height = [self maxYBetween:fullSpace andScreen:thisScreen];
-		NSLog(@"\nIntermediate fullspace:\n              %f\n%f                 %f\n              %f",fullSpace.size.height, fullSpace.origin.x, fullSpace.size.width, fullSpace.origin.y);
-	}
-	
-	NSLog(@"\nCompleted fullspace:\n              %f\n%f                 %f\n              %f",fullSpace.size.height, fullSpace.origin.x, fullSpace.size.width, fullSpace.origin.y);
-	
-	return fullSpace;
-}
-
--(double) minXBetween:(NSRect)rect andScreen:(NSScreen*)screen
-{
-	double minX = [screen frame].origin.x;
-	
-	if(minX >  rect.origin.x)
-		minX =  rect.origin.x;
-	
-	NSLog(@"New Min X:%f", minX);
-	
-	return minX;	
-}
-
--(double) minYBetween:(NSRect)rect andScreen:(NSScreen*)screen
-{
-	double minY = [screen frame].origin.y;
-	
-	if(minY >  rect.origin.y)
-		minY =  rect.origin.y;
-	
-	NSLog(@"New Min Y:%f", minY);
-	
-	return minY;	
-}
-
--(double) maxXBetween:(NSRect)rect andScreen:(NSScreen*)screen
-{
-	double maxX = ([screen frame].origin.x + [screen frame].size.width);
-	double chalX = (rect.origin.x + rect.size.width);
-	
-	if(maxX < chalX)
-		maxX = chalX;
-	
-	NSLog(@"New Max X:%f", maxX);
-	
-	return maxX;	
-}
-
--(double) maxYBetween:(NSRect)rect andScreen:(NSScreen*)screen
-{
-	double maxY = ([screen frame].origin.y + [screen frame].size.height);
-	double chalY = (rect.origin.y + rect.size.height);
-	
-	if(maxY <  chalY)
-		maxY =  chalY;
-	
-	NSLog(@"New Max Y:%f", maxY);
-	
-	return maxY;	
-}
-
--(void)updateDimensions:(NSRect)fullSpace forScreen:(NSScreen*)displayToCheck
-{	
-	NSRect thisScreenFrame = [displayToCheck frame];
-	
-	float thisXMin = thisScreenFrame.origin.x;	
-	float thisYMin = thisScreenFrame.origin.y;
-	
-	float thisXMax = thisScreenFrame.origin.x + thisScreenFrame.size.width;
-	float thisYMax = thisScreenFrame.origin.y + thisScreenFrame.size.height;
-	
-	NSLog(@"\nScreen %@ Dimensions:\n              %f\n%f                 %f\n              %f",[displayToCheck description],thisYMax, thisXMin, thisXMax, thisYMin);
-	
-	if(thisXMin < fullSpace.origin.x)
-		fullSpace.origin.x = thisXMin;
-	if(thisXMax > (fullSpace.origin.x + fullSpace.size.width))
-		fullSpace.size.width = thisXMax;
-	
-	if(thisYMin < (fullSpace.origin.y))
-		fullSpace.origin.y = thisYMin;
-	if(thisYMax > (fullSpace.origin.y + fullSpace.size.height))
-		fullSpace.size.height= thisYMax;	
-	
-	NSLog(@"\nUpdated fullspace:\n              %f\n%f                 %f\n              %f",fullSpace.size.height, fullSpace.origin.x, fullSpace.size.width, fullSpace.origin.y);
-}
-
--(void) saveImageToFile:(NSString*)fileLocation 
-			   imageRep:(NSBitmapImageRep*)outputBitmapImageRep
-{
+- (void)saveImageToFile:(NSString*)fileLocation
+               imageRep:(NSBitmapImageRep*)outputBitmapImageRep {
     NSDictionary *properties = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithFloat:1.0], NSImageCompressionFactor, [NSNumber numberWithBool:FALSE], NSImageProgressive, nil];
     NSData *outputData = [outputBitmapImageRep representationUsingType:NSJPEGFileType properties:properties];
-	[outputData writeToFile:fileLocation atomically:NO];
-}
-
-#pragma mark Window Delegate Methods
-
-- (BOOL)windowShouldClose:(id)window
-{
-	[NSApp terminate:self];
-	
-	return YES;
+    [outputData writeToFile:fileLocation atomically:NO];
 }
 
 @end

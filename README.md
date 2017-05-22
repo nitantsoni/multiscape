@@ -12,6 +12,6 @@ Simply drag and drop any image onto the window. It can be a image on the local c
 
 David Zwerdling for the original code
 
-- <u>New</u>
+- ***New***
 
 I fork this repo to simple the scale method with branch `simple_scale`, I will detect your displays and suggest find a image with MAX(widths) * MAX(heights) resolution, then just cut the image to fit all the displays without scaling.

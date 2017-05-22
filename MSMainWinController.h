@@ -23,19 +23,16 @@
 #define MAX_DISPLAYS 32
 @class MSBackgroundWorker;
 
-@interface MSMainWinController : NSWindowController
-{
-	NSImage * _baseImage;
-	MSBackgroundWorker *bgW;
-	
-	//Interface elements
-	IBOutlet NSTextField *infoField;
-	IBOutlet NSImageView *baseImageView;
+@interface MSMainWinController : NSWindowController {
+    //Interface elements
+    __weak IBOutlet NSTextField *sizeLabel;
+    IBOutlet NSTextField *infoField;
+    IBOutlet NSImageView *baseImageView;
 }
 
 @property (nonatomic, readwrite) NSImage *baseImage;
 
 #pragma mark Main Execute Methods
-- (void) executeForImage:(NSImage*) startImage;
+- (void)executeForImage:(NSImage*)startImage;
 
 @end
