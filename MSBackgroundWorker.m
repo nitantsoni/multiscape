@@ -21,6 +21,10 @@
 
 #import "MSBackgroundWorker.h"
 
+#ifndef REVERSED
+    #define REVERSED
+#endif
+
 const uint32_t maxDisplays = 20;
 
 @interface MSBackgroundWorker () {
@@ -58,7 +62,11 @@ const uint32_t maxDisplays = 20;
     _perfectSize = CGSizeZero;
     for (uint32_t i = 0; i < _displayCount; i++) {
         CGSize sz = [self getDisplayResolution:onlineDisplays[i]];
+#ifndef REVERSED
         _allScreenSizes[i] = sz;
+#else
+        _allScreenSizes[_displayCount-1-i] = sz;
+#endif
         _perfectSize.width += sz.width;
         _perfectSize.height = MAX(_perfectSize.height, sz.height);
     }
@@ -115,7 +123,11 @@ const uint32_t maxDisplays = 20;
         NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%zd.tiff", outputDirectory, i];
         
         [self saveImageToFile:directoryForOutput imageRep:bitmapImage];
+#ifndef REVERSED
         SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:i];
+#else
+        SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:(_displayCount-1-i)];
+#endif
         [thisDesktop setPicture:(SystemEventsAlias *)[NSURL URLWithString:directoryForOutput]];
     }
     
