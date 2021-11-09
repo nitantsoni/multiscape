@@ -1,17 +1,22 @@
-# README
+## About
 
-* About
+MultiScape is a Mac application to make wallpapers that span multiple monitors. It will automatically scale the source image, crop it for the monitors and save the images
 
-MultiScape is a Mac application that scales, crops, saves and applies a single image to multiple desktops—a simple thing that can take lots of time by hand. What’s best about MultiScape is that it’s really simple. All you have to do is supply it with an image. It retrieves the desktop layout information from the Mac OS and goes from there. The process takes seconds.
+## How to use
 
-* How to use
+When you start the application it will calculate the required image size to make the spanning wallpapers and display it. For best results, take an image larger than this size, and drag&drop it onto the window. 
 
-Simply drag and drop any image onto the window. It can be a image on the local computer or something from a browser or anywhere else!
+The output is saved in the User/Pictures/MultiScape folder  
 
-* Thanks
+## Thanks
 
 David Zwerdling for the original code
 
-- ***New***
 
-I fork this repo to simple the scale method with branch `simple_scale`, I will detect your displays and suggest find a image with MAX(widths) * MAX(heights) resolution, then just cut the image to fit all the displays without scaling.
+## Changes from parent repo
+
+- Crop from top left corner instead of bottom left corner
+- Images are cropped left to right from the source, with the highest display ID first
+- Minor changes to enable compatibility with macOS 12 Monterey
+
+

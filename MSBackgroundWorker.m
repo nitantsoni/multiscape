@@ -113,14 +113,16 @@ const uint32_t maxDisplays = 20;
     
     NSString *outputDirectory = [self outputDirectory];
     CGRect currentRect = CGRectZero;
+    int j = _displayCount-1;
     for (int i = 0; i < _displayCount; i++) {
         // CIVector -> [x, y, w, h]
-        CIVector *cropForScreen = [[CIVector alloc] initWithX:currentRect.origin.x Y:currentRect.origin.y
-                                                            Z:_allScreenSizes[i].width W:_allScreenSizes[i].height];
-        currentRect.origin.x += _allScreenSizes[i].width;
+        
+        CIVector *cropForScreen = [[CIVector alloc] initWithX:currentRect.origin.x Y:(int)[scaledImage extent].size.height-_allScreenSizes[j].height
+                                                            Z:_allScreenSizes[j].width W:(int)[scaledImage extent].size.height];
+        currentRect.origin.x += _allScreenSizes[j].width;
         CIImage *croppedImageForScreen = [self cropImage:scaledImage withRect:cropForScreen];
         NSBitmapImageRep *bitmapImage = [self bitmapImageRepForImage:croppedImageForScreen];
-        NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%zd.tiff", outputDirectory, i];
+        NSString *directoryForOutput = [NSString stringWithFormat:@"%@/%d.tiff", outputDirectory, j];
         
         [self saveImageToFile:directoryForOutput imageRep:bitmapImage];
 #ifndef REVERSED
@@ -129,6 +131,7 @@ const uint32_t maxDisplays = 20;
         SystemEventsDesktop *thisDesktop = [[sysEventsBridgeApp desktops] objectAtIndex:(_displayCount-1-i)];
 #endif
         [thisDesktop setPicture:(SystemEventsAlias *)[NSURL URLWithString:directoryForOutput]];
+        j--;
     }
     
     [self notifyOfCompletionInMainThread];
@@ -176,21 +179,22 @@ const uint32_t maxDisplays = 20;
     CIContext *ciContext = [nsContext CIContext];
     [ciContext drawImage:ciImage inRect:imageDestinationRect fromRect:extent];
     [NSGraphicsContext restoreGraphicsState];
-    [NSGraphicsContext restoreGraphicsState];
+    //[NSGraphicsContext restoreGraphicsState];
     return bitmapImageRep;
 }
 
-- (CIVector *)cropRectForScreen:(NSScreen*)screen inFullSpace:(NSRect)fullSpace {
-    NSRect thisScreenFrame = [screen frame];
-    
-    float thisX = thisScreenFrame.origin.x - fullSpace.origin.x;
-    float thisY = thisScreenFrame.origin.y - fullSpace.origin.y;
-    float thisZ = thisScreenFrame.size.width;
-    float thisW = thisScreenFrame.size.height;
-    
-    CIVector *thisVector = [[CIVector alloc] initWithX:thisX Y:thisY Z:thisZ W:thisW];
-    return thisVector;
-}
+//- (CIVector *)cropRectForScreen:(NSScreen*)screen inFullSpace:(NSRect)fullSpace {
+//    NSRect thisScreenFrame = [screen frame];
+//
+//    float thisX = thisScreenFrame.origin.x - fullSpace.origin.x;
+//    float thisY = thisScreenFrame.origin.y - fullSpace.origin.y;
+//    float thisZ = thisScreenFrame.size.width;
+//    float thisW = thisScreenFrame.size.height;
+//    NSLog(@"thisX %f thisY %f thisZ %f thisW %f",thisX,thisY,thisZ,thisW);
+//    NSLog(@"test random");
+//    CIVector *thisVector = [[CIVector alloc] initWithX:thisX Y:thisY Z:thisZ W:thisW];
+//    return thisVector;
+//}
 
 - (CIImage*)scaleImage:(CIImage*)imageToScale byFactor:(double)scaleFactor {
     CIFilter *scaleTransformFilter = [CIFilter filterWithName:@"CILanczosScaleTransform"];
